@@ -1,68 +1,145 @@
-/* welcome.css - man hinh bia (cover-screen) + form nhap ho ten/MSSV (info-dialog) */
-
 .cover-card {
   position: relative;
   width: 100%;
   max-width: 360px;
   background: var(--bg-card);
-  border: 0.5px solid var(--accent-purple);
+  backdrop-filter: blur(12px) brightness(0.85);
+  -webkit-backdrop-filter: blur(12px) brightness(0.85);
+  border: 1px solid var(--accent);
   border-radius: var(--radius-lg);
-  box-shadow: var(--glow-purple);
-  padding: 36px 24px;
+  box-shadow: var(--glow-orange);
+  padding: 24px 18px;
   text-align: center;
 }
 
 .cover-logo {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 16px;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 10px;
   border-radius: var(--radius-md);
   display: block;
   object-fit: contain;
 }
 
 .cover-card .game-title {
+  margin-bottom: 2px;
+  font-size: clamp(30px, 7.5vw, 42px);
+}
+
+.cover-card .game-subtitle {
+  font-size: clamp(14px, 3.5vw, 18px);
+}
+
+.game-topic {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(255, 122, 26, 0.12);
+  border: 0.5px solid rgba(255, 122, 26, 0.4);
+  padding: 2px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
   margin-bottom: 4px;
+  display: inline-block;
+  box-shadow: 0 0 10px rgba(255, 122, 26, 0.25);
+}
+
+.btn-sound,
+.btn-music,
+.btn-info {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 0.5px solid var(--accent);
+  color: var(--accent);
+  box-shadow: var(--glow-orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  z-index: 90;
+}
+
+.btn-sound {
+  left: max(14px, env(safe-area-inset-left, 14px));
+  font-size: 14px;
+}
+
+.btn-music {
+  left: calc(max(14px, env(safe-area-inset-left, 14px)) + 42px);
+  font-size: 14px;
+}
+
+.btn-info {
+  right: max(14px, env(safe-area-inset-right, 14px));
+  font-size: 15px;
+}
+
+.btn-sound:hover,
+.btn-music:hover,
+.btn-info:hover {
+  transform: scale(1.08);
+}
+
+.btn-sound:active,
+.btn-music:active,
+.btn-info:active {
+  transform: scale(0.92);
+}
+
+.btn-sound.muted,
+.btn-music.muted {
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  box-shadow: none;
+  opacity: 0.65;
 }
 
 .cover-mascot {
-  width: 110px;
-  height: 110px;
+  width: 80px;
+  height: 80px;
   object-fit: contain;
-  margin: 12px auto 0;
+  margin: 6px auto 0;
   display: block;
 }
 
 .cover-status {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  margin-top: 10px;
-  margin-bottom: 8px;
+  margin-top: 8px;
+  margin-bottom: 6px;
 }
 
 .form-group {
   text-align: left;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .form-group label {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .form-group input {
   width: 100%;
-  height: 44px;
+  height: 38px;
   background: var(--bg-input);
   border: 0.5px solid var(--border-color);
-  border-radius: 10px;
-  padding: 0 14px;
+  border-radius: 8px;
+  padding: 0 12px;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .form-group input:focus {
@@ -72,13 +149,13 @@
 
 .btn-primary {
   width: 100%;
-  height: 48px;
+  height: 38px;
   background: var(--accent);
   color: var(--accent-dark);
   font-weight: 700;
-  font-size: 14px;
-  border-radius: 10px;
-  margin-top: 8px;
+  font-size: 13px;
+  border-radius: 8px;
+  margin-top: 6px;
   letter-spacing: 0.5px;
   box-shadow: var(--glow-orange);
   transition: transform 0.15s ease;
@@ -90,7 +167,7 @@
 
 .form-error {
   color: var(--danger);
-  font-size: 12px;
-  margin-top: -8px;
-  margin-bottom: 12px;
+  font-size: 11px;
+  margin-top: -6px;
+  margin-bottom: 10px;
 }

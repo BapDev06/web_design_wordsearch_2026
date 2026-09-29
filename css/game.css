@@ -1,95 +1,102 @@
-/* game.css */
-
 #game-screen {
   align-items: center;
-  padding: 24px 12px;
+  padding: 8px 4px;
 }
 
 .game-container {
   position: relative;
   width: 100%;
-  max-width: 480px;
+  max-width: min(440px, 98vw);
   margin: 0 auto;
-}
-
-.btn-info {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--bg-input);
-  border: 0.5px solid var(--accent-cyan);
-  color: var(--accent-cyan);
-  font-size: 16px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  box-shadow: var(--glow-cyan);
-  transition: transform 0.15s ease;
-}
-
-.btn-info:active {
-  transform: scale(0.9);
+  padding: 0 2px;
 }
 
 .game-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 2px;
+  margin-bottom: 6px;
   text-align: center;
 }
 
-/* Font 'VT323' co day du bo dau tieng Viet (khac voi 'Press Start 2P' truoc
-   day thieu subset Vietnamese, gay loi hien thi cac ky tu co dau) */
 .game-title {
   font-family: 'VT323', 'Montserrat', sans-serif;
   color: var(--accent);
-  font-size: 34px;
+  font-size: clamp(28px, 6.5vw, 38px);
   line-height: 1.1;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   text-shadow: var(--glow-orange);
 }
 
 .game-subtitle {
   font-family: 'VT323', 'Montserrat', sans-serif;
   color: var(--accent-cyan);
-  font-size: 18px;
-  letter-spacing: 3px;
+  font-size: clamp(13px, 3.2vw, 16px);
+  letter-spacing: 2px;
   text-shadow: var(--glow-cyan);
+}
+
+.game-topic {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(255, 122, 26, 0.12);
+  border: 0.5px solid rgba(255, 122, 26, 0.4);
+  padding: 3px 12px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  display: inline-block;
+  box-shadow: 0 0 12px rgba(255, 122, 26, 0.25);
 }
 
 .progress-badge {
   background: var(--bg-input);
-  border: 0.5px solid var(--accent-cyan);
-  border-radius: var(--radius-sm);
-  padding: 4px 12px;
-  color: var(--accent-cyan);
-  font-size: 12px;
+  border: 0.5px solid var(--accent);
+  border-radius: 6px;
+  padding: 2px 10px;
+  color: var(--accent);
+  font-size: 11px;
   font-weight: 700;
-  box-shadow: var(--glow-cyan);
+  box-shadow: var(--glow-orange);
+  margin-top: 1px;
 }
 
 .keyword-list {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .keyword-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: var(--bg-input);
   border: 0.5px solid var(--border-color);
   color: var(--text-secondary);
-  font-size: 13px;
-  padding: 5px 10px;
-  border-radius: var(--radius-sm);
+  font-size: 12px;
+  padding: 4px 9px;
+  border-radius: 6px;
   font-weight: 600;
   letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.keyword-chip.has-tooltip {
+  cursor: pointer;
+}
+
+.keyword-chip.has-tooltip:hover {
+  transform: translateY(-2px);
 }
 
 .keyword-chip.found {
@@ -97,6 +104,7 @@
   border-color: var(--success);
   color: var(--success);
   text-decoration: line-through;
+  box-shadow: 0 0 8px rgba(46, 255, 160, 0.2);
 }
 
 .keyword-chip.hinted {
@@ -106,79 +114,219 @@
   font-weight: 700;
   letter-spacing: 1px;
   box-shadow: var(--glow-orange);
+  animation: chip-hint-glow 2s infinite alternate;
+}
+
+.chip-hint-icon {
+  font-size: 11px;
+  color: var(--accent-cyan);
+  margin-left: 2px;
+  animation: spin-pulse 3s infinite ease-in-out;
+}
+
+@keyframes chip-hint-glow {
+  0% {
+    box-shadow: 0 0 10px rgba(255, 122, 26, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 18px rgba(255, 122, 26, 0.85), 0 0 6px #ffd644;
+  }
 }
 
 .grid-wrapper {
   position: relative;
   background: var(--bg-card);
-  border: 0.5px solid var(--accent-cyan);
+  backdrop-filter: blur(12px) brightness(0.85);
+  -webkit-backdrop-filter: blur(12px) brightness(0.85);
+  border: 1px solid var(--accent);
   border-radius: var(--radius-md);
-  box-shadow: var(--glow-cyan);
-  padding: 5px;
-  overflow: auto;
-  max-height: 65vh;
+  box-shadow: var(--glow-orange);
+  padding: 6px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  width: 100%;
+  max-width: min(420px, 96vw);
 }
 
-/* Goc HUD trang tri kieu cyber, cho lưới chữ đỡ trống trải */
 .grid-wrapper::before,
 .grid-wrapper::after {
   content: '';
   position: absolute;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border: 2px solid var(--accent-purple);
   pointer-events: none;
 }
 
 .grid-wrapper::before {
-  top: -2px;
-  left: -2px;
+  top: -1px;
+  left: -1px;
   border-right: none;
   border-bottom: none;
 }
 
 .grid-wrapper::after {
-  bottom: -2px;
-  right: -2px;
+  bottom: -1px;
+  right: -1px;
   border-left: none;
   border-top: none;
 }
 
-/* Widget bao truoc goi y: hien dem nguoc + linh vat, doi bieu cam khi gan
-   den luc duoc goi y (xem HINT_URGENT_THRESHOLD_S trong config.js) */
-.hint-widget {
+/* Floating Mascot Hint Popup in bottom-right (Compact & unobtrusive on mobile) */
+.mascot-hint-popup {
+  position: fixed;
+  bottom: max(10px, env(safe-area-inset-bottom, 10px));
+  right: max(10px, env(safe-area-inset-right, 10px));
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  gap: 6px;
+  z-index: 120;
+  user-select: none;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+}
+
+.hint-cloud {
+  position: relative;
+  background: var(--bg-card);
+  backdrop-filter: blur(10px) brightness(0.85);
+  -webkit-backdrop-filter: blur(10px) brightness(0.85);
+  border: 1.5px solid var(--accent);
+  color: var(--text-primary);
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  box-shadow: var(--glow-orange);
+  text-align: center;
+  white-space: nowrap;
+  transition: all 0.25s ease;
+}
+
+/* Cloud / Speech bubble tail pointing right towards the mascot */
+.hint-cloud::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -5px;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid var(--accent);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-right: none;
+  transition: border-left-color 0.25s ease;
+}
+
+/* When countdown reaches 0: hint is ready and clickable */
+.hint-cloud.ready {
+  background: var(--accent);
+  border-color: #ffd644;
+  color: #160700;
+  font-size: 12.5px;
+  font-weight: 800;
+  box-shadow: 0 0 16px rgba(242, 109, 33, 0.75), 0 0 5px #ffd644;
+  animation: cloud-bounce 0.85s infinite alternate ease-in-out;
+}
+
+.hint-cloud.ready::after {
+  border-left-color: #ffd644;
+}
+
+@keyframes cloud-bounce {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    transform: translateY(-4px) scale(1.06);
+  }
+}
+
+.hint-mascot-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.6));
+  transition: transform 0.2s ease;
+}
+
+.mascot-hint-popup.clickable {
+  cursor: pointer;
+}
+
+.mascot-hint-popup.clickable:hover .hint-mascot-img {
+  transform: scale(1.08) rotate(3deg);
+}
+
+.mascot-hint-popup.clickable:active {
+  transform: scale(0.94);
+}
+
+/* 3-2-1 Countdown Overlay */
+.countdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 8, 15, 0.88);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  padding: 8px 12px;
-  background: var(--bg-input);
-  border: 0.5px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  z-index: 200;
 }
 
-.hint-mascot {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  flex-shrink: 0;
+.countdown-card {
+  text-align: center;
+  user-select: none;
 }
 
-.hint-countdown {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
+.countdown-number {
+  font-family: 'VT323', monospace;
+  font-size: 110px;
+  color: var(--accent);
+  text-shadow: var(--glow-orange);
+  animation: countdown-pop 0.85s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.countdown-number.go {
+  color: var(--success);
+  text-shadow: 0 0 30px rgba(46, 255, 160, 0.85);
+  font-size: 100px;
+}
+
+@keyframes countdown-pop {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+
+  45% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+
+  75% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(0.9);
+    opacity: 0.95;
+  }
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(var(--grid-size), 40px);
-  grid-template-rows: repeat(var(--grid-size), 40px);
-  gap: 3px;
-  width: max-content;
+  grid-template-columns: repeat(var(--grid-size), minmax(0, 1fr));
+  gap: 2.5px;
+  width: 100%;
   margin: 0 auto;
   user-select: none;
+  aspect-ratio: 1;
 }
 
 .grid.readonly {
@@ -187,13 +335,14 @@
 }
 
 .grid-cell {
+  aspect-ratio: 1 / 1;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-input);
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 500;
+  border-radius: 4px;
+  font-size: clamp(14px, 4.4vw, 18px);
+  font-weight: 700;
   color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -206,42 +355,47 @@
 .hint-text {
   text-align: center;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  margin-top: 8px;
+  margin-top: 5px;
 }
 
 .post-win-panel {
-  margin-top: 14px;
-  padding: 14px;
-  background: var(--bg-input);
-  border: 0.5px solid var(--accent-purple);
-  border-radius: var(--radius-md);
-  box-shadow: var(--glow-purple);
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  backdrop-filter: blur(12px) brightness(0.85);
+  -webkit-backdrop-filter: blur(12px) brightness(0.85);
+  border: 0.5px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: var(--glow-orange);
   text-align: center;
+  width: 100%;
+  max-width: min(420px, 96vw);
 }
 
 .post-win-status {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+  line-height: 1.35;
 }
 
 .btn-ggform {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  height: 46px;
-  margin-top: 10px;
+  height: 36px;
+  margin-top: 6px;
   background: var(--success-bg);
   color: var(--success);
   border: 0.5px solid var(--success);
-  font-weight: 700;
-  font-size: 14px;
-  border-radius: 10px;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 8px;
   text-decoration: none;
   transition: transform 0.15s ease;
 }
@@ -253,18 +407,86 @@
 .btn-reset {
   display: block;
   width: 100%;
-  height: 44px;
-  margin-top: 14px;
+  max-width: min(340px, 86vw);
+  height: 32px;
+  margin-top: 5px;
   background: transparent;
   border: 0.5px solid var(--border-color);
   color: var(--text-secondary);
-  font-weight: 700;
-  font-size: 13px;
-  border-radius: 10px;
+  font-weight: 600;
+  font-size: 11.5px;
+  border-radius: 8px;
   letter-spacing: 0.5px;
   transition: transform 0.15s ease;
 }
 
 .btn-reset:active {
   transform: scale(0.97);
+}
+
+/* Compact Mobile Screens & Short Viewports (< 750px) */
+@media (max-width: 480px) {
+  .btn-sound,
+  .btn-music,
+  .btn-info {
+    top: max(8px, env(safe-area-inset-top, 8px));
+    width: 30px;
+    height: 30px;
+    font-size: 12.5px;
+  }
+  .btn-sound {
+    left: max(8px, env(safe-area-inset-left, 8px));
+  }
+  .btn-music {
+    left: calc(max(8px, env(safe-area-inset-left, 8px)) + 36px);
+  }
+  .btn-info {
+    right: max(8px, env(safe-area-inset-right, 8px));
+  }
+}
+
+@media (max-height: 750px) {
+  #game-screen {
+    padding: 4px 2px;
+  }
+  .game-header {
+    margin-bottom: 3px;
+    gap: 1px;
+  }
+  .game-title {
+    font-size: clamp(22px, 5.2vw, 28px);
+  }
+  .game-subtitle {
+    font-size: 11px;
+    margin-top: 0;
+  }
+  .game-topic {
+    font-size: 10px;
+    padding: 1px 8px;
+    margin: 1px 0;
+  }
+  .progress-badge {
+    font-size: 10px;
+    padding: 1px 8px;
+  }
+  .keyword-list {
+    gap: 2px;
+    margin-bottom: 4px;
+  }
+  .keyword-chip {
+    padding: 2px 6px;
+    font-size: 10.5px;
+  }
+  .grid-wrapper {
+    padding: 4px;
+  }
+  .hint-text {
+    font-size: 9.5px;
+    margin-top: 2px;
+  }
+  .btn-reset {
+    height: 28px;
+    font-size: 11px;
+    margin-top: 3px;
+  }
 }

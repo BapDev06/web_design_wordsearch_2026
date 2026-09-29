@@ -1,40 +1,70 @@
-// game.js - "Nhac truong": giu state, goi cac module khac
-import { GRID_SIZE, KEYWORDS, HINT_INTERVAL_MS, HINT_URGENT_THRESHOLD_S, GGFORM_URL } from './config.js';
+import { GRID_SIZE, HINT_INTERVAL_MS, HINT_URGENT_THRESHOLD_S, GGFORM_URL, TOPIC, TEXTS } from './config.js';
 import { generateMatrix } from './matrix.js';
 import { createSelectionManager } from './selection.js';
 import { checkMatch } from './validator.js';
 import { saveState, clearState } from './storage.js';
-import { randomInt, maskWord } from './utils.js';
+import { randomInt, randomLetter, maskWord } from './utils.js';
 import * as anim from './animation.js';
-import { exportResultImage } from './capture.js';
+import { exportResultImage, generateProofImage, openProofDialog, getCachedProof } from './capture.js';
+import { playTapSound, playDeselectSound, playMatchSound, playWinSound, playHintReadySound, playHintRevealSound } from './audio.js';
+import { showModalConfirm, showModalAlert } from './modal.js';
 
 export function createGame({ dom, state }) {
   let grid = state.grid;
   let placements = state.placements;
-  const foundKeywords = [...state.foundKeywords];
+
+  // Auto-heal: ensure grid is a valid GRID_SIZE x GRID_SIZE matrix
+  if (
+    !grid ||
+    !Array.isArray(grid) ||
+    grid.length !== GRID_SIZE ||
+    !Array.isArray(grid[0]) ||
+    grid[0].length !== GRID_SIZE ||
+    !placements
+  ) {
+    const generated = generateMatrix(state.keywords);
+    grid = generated.grid;
+    placements = generated.placements;
+    state.grid = grid;
+    state.placements = placements;
+    if (!state.keywords || !Array.isArray(state.keywords) || state.keywords.length === 0) {
+      state.keywords = generated.keywords;
+    }
+    saveState(state);
+  }
+
+  const foundKeywords = [...(state.foundKeywords || [])];
   let isReadOnly = state.isWin;
   let infoSubmitted = state.infoSubmitted;
   let exported = state.exported;
+  let exportClicked = Boolean(state.exportClicked || state.exported);
+
+  const activeKeywordObjects = state.keywords && state.keywords.length > 0
+    ? state.keywords
+    : Object.keys(placements).map((k) => ({ keyword: k, description: '' }));
+  const activeKeywords = activeKeywordObjects.map((k) => (typeof k === 'string' ? k : k.keyword));
+  const descriptionMap = Object.fromEntries(
+    activeKeywordObjects.map((k) => [typeof k === 'string' ? k : k.keyword, typeof k === 'string' ? '' : (k.description || '')])
+  );
 
   const selectionMgr = createSelectionManager();
-  const cellElements = []; // ma tran cac the div, cellElements[r][c]
+  const cellElements = [];
 
-  // Goi y theo thoi gian: word -> chuoi da che ky tu (VD "B_T_ON"). Khong
-  // luu vao localStorage, chi ton tai trong phien choi hien tai.
-  const hintedWords = {};
+  const hintedWords = { ...(state.hintedWords || {}) };
   let hintTimerId = null;
-  let nextHintAt = null; // moc thoi gian (Date.now()) cua lan goi y tiep theo
+  let nextHintAt = null;
+  let isHintReady = false;
+  let isCometFlying = false;
 
-  // O co the la diem giao nhau cua nhieu tu (VD: chu L cuoi cua HTML trung
-  // chu L dau cua LAYOUT). Chi coi la "het viec" khi TAT CA cac tu di qua
-  // o do da duoc tim thay, khong phai he 1 tu xong la khoa ca o.
   const cellWordsMap = {};
   Object.entries(placements).forEach(([word, cells]) => {
-    cells.forEach(({ r, c }) => {
-      const key = `${r}_${c}`;
-      if (!cellWordsMap[key]) cellWordsMap[key] = [];
-      cellWordsMap[key].push(word);
-    });
+    if (Array.isArray(cells)) {
+      cells.forEach(({ r, c }) => {
+        const key = `${r}_${c}`;
+        if (!cellWordsMap[key]) cellWordsMap[key] = [];
+        cellWordsMap[key].push(word);
+      });
+    }
   });
 
   function isCellFullyFound(row, col) {
@@ -46,10 +76,13 @@ export function createGame({ dom, state }) {
   function persist() {
     saveState({
       ...state,
+      keywords: activeKeywordObjects,
       foundKeywords,
+      hintedWords,
       isWin: isReadOnly,
       infoSubmitted,
       exported,
+      exportClicked,
       grid,
       placements,
     });
@@ -60,10 +93,11 @@ export function createGame({ dom, state }) {
     dom.gridEl.style.setProperty('--grid-size', GRID_SIZE);
     for (let r = 0; r < GRID_SIZE; r++) {
       cellElements[r] = [];
+      const row = (grid && grid[r]) || [];
       for (let c = 0; c < GRID_SIZE; c++) {
         const cellEl = document.createElement('div');
         cellEl.className = 'grid-cell';
-        cellEl.textContent = grid[r][c];
+        cellEl.textContent = row[c] || randomLetter();
         cellEl.dataset.row = r;
         cellEl.dataset.col = c;
         cellEl.addEventListener('click', () => onCellClick(r, c, cellEl));
@@ -73,85 +107,221 @@ export function createGame({ dom, state }) {
     }
   }
 
-  // Danh sach tu khoa khong hien chu that ra ngoai: tu chua tim thay ngay tu
-  // dau da hien so gach duoi dung bang do dai tu (VD "______") de nguoi choi
-  // biet duong ma tim, sau do goi y theo thoi gian se lo dan 1 vai ky tu
   function renderKeywordList() {
     dom.keywordListEl.innerHTML = '';
-    KEYWORDS.forEach((word) => {
+    activeKeywords.forEach((word) => {
       const chip = document.createElement('span');
+      chip.dataset.keyword = word;
       const isFound = foundKeywords.includes(word);
-      chip.className = 'keyword-chip' + (isFound ? ' found' : '');
+      const isHinted = !!hintedWords[word];
+      const desc = descriptionMap[word] || '';
+
+      chip.className = 'keyword-chip' + (isFound ? ' found' : isHinted ? ' hinted' : ' unhinted');
+
       if (isFound) {
-        chip.textContent = word;
-      } else if (hintedWords[word]) {
-        chip.textContent = hintedWords[word];
-        chip.classList.add('hinted');
+        chip.innerHTML = `<span class="chip-text">${word}</span>`;
+      } else if (isHinted) {
+        chip.innerHTML = `<span class="chip-text">${hintedWords[word]}</span>${desc ? '<i class="fa-solid fa-circle-question chip-hint-icon" title="Bấm xem mô tả"></i>' : ''}`;
       } else {
-        chip.textContent = '_'.repeat(word.length);
+        chip.innerHTML = `<span class="chip-text">${'_'.repeat(word.length)}</span>`;
       }
+
+      if (desc && (isHinted || isFound)) {
+        chip.title = `Gợi ý: ${desc}`;
+        chip.setAttribute('aria-label', `Gợi ý: ${desc}`);
+        chip.classList.add('has-tooltip');
+        chip.addEventListener('click', () => {
+          showModalAlert({
+            title: isFound ? `Từ khóa: ${word}` : `Gợi ý cho từ "${hintedWords[word] || word}"`,
+            message: desc,
+            mascot: isFound ? 'assets/mascot/mascot-cheer.png' : 'assets/mascot/mascot-idle.png',
+            btnText: 'Đã hiểu',
+          });
+        });
+      }
+
       dom.keywordListEl.appendChild(chip);
     });
   }
 
-  // Cu HINT_INTERVAL_MS troi qua ma con tu chua tim duoc thi tu dong che
-  // bot ky tu 1 tu ngau nhien de goi y. Uu tien tu chua tung duoc goi y de
-  // moi lan hen gio deu mang lai thong tin moi cho nguoi choi.
-  //
-  // Chay tick moi giay de hien dem nguoc + doi bieu cam linh vat (binh
-  // thuong -> sot ruot khi gan den luc goi y), de nguoi choi biet truoc
-  // sap co goi y thay vi bi bat ngo (va do phai chup man hinh cho AI).
+  function renderTopic() {
+    if (dom.gameTopicEl) dom.gameTopicEl.textContent = TOPIC;
+  }
+
+  function updateHintDisplay() {
+    if (isReadOnly) {
+      stopHintTimer(true);
+      return;
+    }
+
+    const unfound = activeKeywords.filter((w) => !foundKeywords.includes(w));
+    if (unfound.length === 0) {
+      stopHintTimer(true);
+      return;
+    }
+
+    const notYetHinted = unfound.filter((w) => !hintedWords[w]);
+    if (notYetHinted.length === 0) {
+      stopHintTimer(false);
+      isHintReady = false;
+      dom.mascotHintPopupEl.classList.remove('hidden', 'clickable');
+      dom.hintCloudEl.classList.remove('ready');
+      dom.hintMascotEl.src = 'assets/mascot/mascot-idle.png';
+      dom.hintCloudTextEl.textContent = 'Hết gợi ý ✨';
+      return;
+    }
+
+    if (!isHintReady && !hintTimerId) {
+      startHintTimer();
+    }
+  }
+
   function startHintTimer() {
+    if (isReadOnly) return;
+    const unfound = activeKeywords.filter((w) => !foundKeywords.includes(w));
+    if (unfound.length === 0) {
+      stopHintTimer(true);
+      return;
+    }
+
+    const notYetHinted = unfound.filter((w) => !hintedWords[w]);
+    if (notYetHinted.length === 0) {
+      stopHintTimer(false);
+      isHintReady = false;
+      dom.mascotHintPopupEl.classList.remove('hidden', 'clickable');
+      dom.hintCloudEl.classList.remove('ready');
+      dom.hintMascotEl.src = 'assets/mascot/mascot-idle.png';
+      dom.hintCloudTextEl.textContent = 'Hết gợi ý ✨';
+      return;
+    }
+
+    isHintReady = false;
+    dom.mascotHintPopupEl.classList.remove('hidden', 'clickable');
+    dom.hintCloudEl.classList.remove('ready');
+    dom.hintMascotEl.src = 'assets/mascot/mascot-idle.png';
+
     nextHintAt = Date.now() + HINT_INTERVAL_MS;
-    dom.hintWidgetEl.classList.remove('hidden');
     tickHintCountdown();
+    if (hintTimerId) clearInterval(hintTimerId);
     hintTimerId = setInterval(tickHintCountdown, 1000);
   }
 
   function tickHintCountdown() {
-    const unfound = KEYWORDS.filter((w) => !foundKeywords.includes(w));
+    const unfound = activeKeywords.filter((w) => !foundKeywords.includes(w));
     if (unfound.length === 0) {
-      stopHintTimer();
+      stopHintTimer(true);
+      return;
+    }
+
+    const notYetHinted = unfound.filter((w) => !hintedWords[w]);
+    if (notYetHinted.length === 0) {
+      stopHintTimer(false);
+      isHintReady = false;
+      dom.hintCloudEl.classList.remove('ready');
+      dom.mascotHintPopupEl.classList.remove('clickable');
+      dom.hintMascotEl.src = 'assets/mascot/mascot-idle.png';
+      dom.hintCloudTextEl.textContent = 'Hết gợi ý ✨';
       return;
     }
 
     const remainingMs = nextHintAt - Date.now();
     if (remainingMs <= 0) {
-      const notYetHinted = unfound.filter((w) => !hintedWords[w]);
-      const pool = notYetHinted.length > 0 ? notYetHinted : unfound;
-      const word = pool[randomInt(pool.length)];
-      hintedWords[word] = maskWord(word);
-      renderKeywordList();
-      nextHintAt = Date.now() + HINT_INTERVAL_MS;
+      if (hintTimerId) {
+        clearInterval(hintTimerId);
+        hintTimerId = null;
+      }
+      isHintReady = true;
+      dom.hintCloudEl.classList.add('ready');
+      dom.mascotHintPopupEl.classList.add('clickable');
+      dom.hintMascotEl.src = 'assets/mascot/mascot-shy.png';
+      dom.hintCloudTextEl.textContent = '💡 Gợi ý?';
+      playHintReadySound();
+      return;
     }
 
-    const remainingS = Math.max(0, Math.ceil((nextHintAt - Date.now()) / 1000));
+    const remainingS = Math.max(1, Math.ceil(remainingMs / 1000));
     dom.hintMascotEl.src =
       remainingS <= HINT_URGENT_THRESHOLD_S
         ? 'assets/mascot/mascot-cry.png'
-        : 'assets/mascot/mascot-shy.png';
-    dom.hintCountdownEl.textContent = `Gợi ý tiếp theo sau: ${remainingS}s`;
+        : 'assets/mascot/mascot-idle.png';
+    dom.hintCloudTextEl.textContent = `${remainingS}s`;
   }
 
-  function stopHintTimer() {
+  function handleHintClick() {
+    if (!isHintReady || isReadOnly || isCometFlying) return;
+
+    const unfound = activeKeywords.filter((w) => !foundKeywords.includes(w));
+    const notYetHinted = unfound.filter((w) => !hintedWords[w]);
+    if (notYetHinted.length === 0) {
+      stopHintTimer(false);
+      isHintReady = false;
+      dom.hintCloudEl.classList.remove('ready');
+      dom.mascotHintPopupEl.classList.remove('clickable');
+      dom.hintMascotEl.src = 'assets/mascot/mascot-idle.png';
+      dom.hintCloudTextEl.textContent = 'Hết gợi ý ✨';
+      return;
+    }
+
+    const targetWord = notYetHinted[randomInt(notYetHinted.length)];
+    const targetChipEl = dom.keywordListEl.querySelector(`[data-keyword="${targetWord}"]`);
+
+    isCometFlying = true;
+    isHintReady = false;
+    dom.hintCloudEl.classList.remove('ready');
+    dom.mascotHintPopupEl.classList.remove('clickable');
+
+    anim.launchCometHint(dom.mascotHintPopupEl, targetChipEl, () => {
+      isCometFlying = false;
+      hintedWords[targetWord] = maskWord(targetWord);
+      playHintRevealSound();
+      renderKeywordList();
+      persist();
+
+      const remainingUnhinted = unfound.filter((w) => w !== targetWord && !hintedWords[w]);
+      if (remainingUnhinted.length === 0) {
+        stopHintTimer(false);
+        isHintReady = false;
+        dom.hintCloudEl.classList.remove('ready');
+        dom.mascotHintPopupEl.classList.remove('clickable');
+        dom.hintMascotEl.src = 'assets/mascot/mascot-idle.png';
+        dom.hintCloudTextEl.textContent = 'Hết gợi ý ✨';
+      } else {
+        startHintTimer();
+      }
+    });
+  }
+
+  function stopHintTimer(hideWidget = false) {
     if (hintTimerId) {
       clearInterval(hintTimerId);
       hintTimerId = null;
     }
-    dom.hintWidgetEl.classList.add('hidden');
+    isHintReady = false;
+    if (dom.mascotHintPopupEl) {
+      if (hideWidget) {
+        dom.mascotHintPopupEl.classList.add('hidden');
+      } else {
+        dom.mascotHintPopupEl.classList.remove('hidden', 'clickable');
+        if (dom.hintCloudEl) dom.hintCloudEl.classList.remove('ready');
+        if (dom.hintMascotEl) dom.hintMascotEl.src = 'assets/mascot/mascot-idle.png';
+        if (dom.hintCloudTextEl) dom.hintCloudTextEl.textContent = 'Hết gợi ý ✨';
+      }
+    }
   }
 
   function renderProgress() {
-    dom.progressEl.textContent = `${foundKeywords.length}/${KEYWORDS.length}`;
+    dom.progressEl.textContent = `${foundKeywords.length}/${activeKeywords.length}`;
   }
 
   function lockFoundCells() {
     foundKeywords.forEach((word) => {
       const cells = placements[word];
-      cells.forEach(({ r, c }) => {
-        cellElements[r][c].classList.add('cell-correct');
-        if (isCellFullyFound(r, c)) cellElements[r][c].classList.add('cell-locked');
-      });
+      if (cells) {
+        cells.forEach(({ r, c }) => {
+          cellElements[r][c].classList.add('cell-correct');
+          if (isCellFullyFound(r, c)) cellElements[r][c].classList.add('cell-locked');
+        });
+      }
     });
   }
 
@@ -159,9 +329,6 @@ export function createGame({ dom, state }) {
     dom.gridEl.classList.add('readonly');
   }
 
-  // Panel hien sau khi thang, noi dung thay doi theo tung buoc trong luong:
-  // chua nhap ten/MSSV -> da nhap nhung chua xuat anh -> da xuat (van cho
-  // xuat lai neu lo lam mat anh, chi rieng ten/MSSV la khong sua duoc nua)
   function renderPostWinPanel() {
     if (!isReadOnly) {
       dom.postWinPanelEl.classList.add('hidden');
@@ -170,6 +337,7 @@ export function createGame({ dom, state }) {
     dom.postWinPanelEl.classList.remove('hidden');
     dom.saveProofBtn.classList.add('hidden');
     dom.exportActionBtn.classList.add('hidden');
+    if (dom.cannotExportBtn) dom.cannotExportBtn.classList.add('hidden');
     dom.ggformLinkEl.classList.add('hidden');
 
     if (!infoSubmitted) {
@@ -179,12 +347,17 @@ export function createGame({ dom, state }) {
     }
 
     dom.postWinStatusEl.textContent = exported
-      ? `Đã xuất minh chứng cho ${state.fullName} — MSSV: ${state.studentId} ✓ (bấm lại nếu lỡ mất ảnh)`
+      ? `Đã xuất minh chứng cho ${state.fullName} — MSSV: ${state.studentId}`
       : `Người chơi: ${state.fullName} — MSSV: ${state.studentId}`;
     dom.exportActionBtn.classList.remove('hidden');
     dom.exportActionBtn.innerHTML = exported
       ? '<i class="fa-solid fa-download"></i> Xuất ảnh lại'
       : '<i class="fa-solid fa-download"></i> Xuất ảnh';
+
+    // Chỉ hiện nút Không xuất ảnh được khi đã nhấn nút xuất ảnh ít nhất 1 lần
+    if (dom.cannotExportBtn) {
+      dom.cannotExportBtn.classList.toggle('hidden', !exportClicked);
+    }
 
     if (exported && GGFORM_URL) {
       dom.ggformLinkEl.href = GGFORM_URL;
@@ -192,10 +365,16 @@ export function createGame({ dom, state }) {
     }
   }
 
-  // Xoa toan bo du lieu van hien tai va tai lai trang tu dau (dung khi
-  // nguoi choi muon choi lai hoac nguoi khac muon muon may choi moi)
-  function handleReset() {
-    if (!window.confirm('Xóa toàn bộ tiến trình hiện tại và chơi lại từ đầu?')) return;
+  async function handleReset() {
+    const confirmed = await showModalConfirm({
+      title: 'Chơi lại từ đầu?',
+      message: 'Toàn bộ tiến trình ván chơi hiện tại sẽ bị xóa và ma trận mới sẽ được tạo.',
+      confirmText: 'Chơi lại',
+      cancelText: 'Tiếp tục chơi',
+      danger: true,
+      mascot: 'assets/mascot/mascot-cry.png',
+    });
+    if (!confirmed) return;
     clearState();
     window.location.reload();
   }
@@ -204,10 +383,15 @@ export function createGame({ dom, state }) {
     if (isReadOnly) return;
     if (isCellFullyFound(row, col)) return;
 
+    const prevCount = selectionMgr.getSelection().length;
     const selection = selectionMgr.tapCell({ row, col });
 
-    // Ve lai toan bo lua chon hien tai (xoa het roi to lai theo selection moi,
-    // ap dung cho ca truong hop bo chon 1 phan chuoi)
+    if (selection.length < prevCount) {
+      playDeselectSound();
+    } else {
+      playTapSound();
+    }
+
     clearAllSelectingClasses();
     const selectionWithLetters = selection.map((s) => ({
       ...s,
@@ -218,7 +402,7 @@ export function createGame({ dom, state }) {
       if (!isCellFullyFound(s.row, s.col)) anim.markSelecting(el);
     });
 
-    const matchedWord = checkMatch(selectionWithLetters, foundKeywords);
+    const matchedWord = checkMatch(selectionWithLetters, foundKeywords, activeKeywords);
     if (matchedWord) {
       onKeywordFound(matchedWord, selectionWithLetters);
     }
@@ -232,6 +416,7 @@ export function createGame({ dom, state }) {
 
   function onKeywordFound(word, selection) {
     foundKeywords.push(word);
+    playMatchSound();
     selection.forEach((s) => {
       const el = cellElements[s.row][s.col];
       anim.markCorrect(el);
@@ -242,18 +427,21 @@ export function createGame({ dom, state }) {
     renderProgress();
     persist();
 
-    if (foundKeywords.length === KEYWORDS.length) {
+    if (foundKeywords.length === activeKeywords.length) {
       onWin();
+    } else {
+      updateHintDisplay();
     }
   }
 
   function onWin() {
     isReadOnly = true;
     state.winTime = Date.now();
-    stopHintTimer();
+    stopHintTimer(true);
     applyReadOnly();
     persist();
     renderPostWinPanel();
+    playWinSound();
     anim.showDialog(dom.victoryDialogEl, true);
     anim.launchConfetti(dom.confettiCanvasEl);
   }
@@ -262,8 +450,6 @@ export function createGame({ dom, state }) {
     anim.hideDialog(dom.victoryDialogEl);
   }
 
-  // Mo modal nhap ten/MSSV - chi duoc goi khi chua infoSubmitted (nut
-  // "Luu minh chung" da bi an ngay sau khi nhap thanh cong 1 lan)
   function openInfoDialog() {
     dom.infoFormErrorEl.classList.add('hidden');
     dom.infoFormEl.reset();
@@ -276,11 +462,11 @@ export function createGame({ dom, state }) {
 
   function handleInfoSubmit(fullName, studentId) {
     if (!fullName) {
-      showInfoError('Vui lòng nhập họ và tên.');
+      showInfoError(TEXTS.MODALS.INFO_FORM.errNameRequired);
       return;
     }
-    if (!/^\d{10}$/.test(studentId)) {
-      showInfoError('Mã số sinh viên phải gồm đúng 10 chữ số, không chứa chữ cái.');
+    if (!/^\d{7,12}$/.test(studentId)) {
+      showInfoError(TEXTS.MODALS.INFO_FORM.errStudentIdInvalid);
       return;
     }
     state.fullName = fullName;
@@ -297,7 +483,12 @@ export function createGame({ dom, state }) {
   }
 
   async function handleExportAction() {
-    const success = await exportResultImage(state, grid, placements, dom.exportActionBtn);
+    exportClicked = true;
+    state.exportClicked = true;
+    persist();
+    renderPostWinPanel();
+
+    const success = await exportResultImage(state, grid, placements, dom.exportActionBtn, dom);
     if (success) {
       exported = true;
       persist();
@@ -305,7 +496,66 @@ export function createGame({ dom, state }) {
     }
   }
 
+  async function handleCannotExportAction() {
+    const origHtml = dom.cannotExportBtn ? dom.cannotExportBtn.innerHTML : '';
+    if (dom.cannotExportBtn) {
+      dom.cannotExportBtn.disabled = true;
+      dom.cannotExportBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang tải ảnh...';
+    }
+
+    let proof = getCachedProof();
+    if (!proof || !proof.dataUrl) {
+      const res = await generateProofImage(state, grid, placements);
+      if (res.success) {
+        proof = res;
+      }
+    }
+
+    if (dom.cannotExportBtn) {
+      dom.cannotExportBtn.disabled = false;
+      dom.cannotExportBtn.innerHTML = origHtml;
+    }
+
+    if (proof && (proof.dataUrl || proof.blobUrl)) {
+      exported = true;
+      state.exported = true;
+      persist();
+      renderPostWinPanel();
+
+      await openProofDialog(dom, proof, {
+        showAlert: true,
+        alertTitle: TEXTS.MODALS.FB_BROWSER_ALERT.title,
+        alertMessage: TEXTS.MODALS.FB_BROWSER_ALERT.message,
+      });
+    } else {
+      await showModalAlert({
+        title: 'Lỗi xuất ảnh',
+        message: 'Không thể tạo ảnh minh chứng. Vui lòng chụp màn hình giao diện hiện tại để làm minh chứng!',
+        mascot: 'assets/mascot/mascot-cry.png',
+        btnText: 'Đã hiểu',
+      });
+    }
+  }
+
+  async function handleGgFormClick(e) {
+    if (e) e.preventDefault();
+    await showModalAlert({
+      title: TEXTS.MODALS.SUBMIT_PROOF_NOTICE.title,
+      message: TEXTS.MODALS.SUBMIT_PROOF_NOTICE.message,
+      mascot: 'assets/mascot/mascot-idle.png',
+      btnText: TEXTS.MODALS.SUBMIT_PROOF_NOTICE.btnText,
+      onConfirm: () => {
+        if (!GGFORM_URL) return;
+        const newTab = window.open(GGFORM_URL, '_blank', 'noopener,noreferrer');
+        if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {
+          window.location.href = GGFORM_URL;
+        }
+      },
+    });
+  }
+
   function init() {
+    renderTopic();
     renderGrid();
     renderKeywordList();
     renderProgress();
@@ -313,8 +563,85 @@ export function createGame({ dom, state }) {
     if (isReadOnly) {
       applyReadOnly();
       renderPostWinPanel();
+      stopHintTimer(true);
     } else {
+      if (dom.mascotHintPopupEl) {
+        dom.mascotHintPopupEl.classList.remove('hidden');
+        dom.mascotHintPopupEl.onclick = handleHintClick;
+      }
       startHintTimer();
+    }
+  }
+
+  function autoSolve() {
+    if (isReadOnly) {
+      anim.showDialog(dom.victoryDialogEl, true);
+      return;
+    }
+
+    activeKeywords.forEach((word) => {
+      if (!foundKeywords.includes(word)) {
+        foundKeywords.push(word);
+      }
+    });
+
+    selectionMgr.reset();
+    clearAllSelectingClasses();
+
+    foundKeywords.forEach((word) => {
+      const cells = placements[word];
+      if (cells) {
+        cells.forEach(({ r, c }) => {
+          const el = cellElements[r] && cellElements[r][c];
+          if (el) {
+            anim.markCorrect(el);
+            if (isCellFullyFound(r, c)) el.classList.add('cell-locked');
+          }
+        });
+      }
+    });
+
+    renderKeywordList();
+    renderProgress();
+    onWin();
+  }
+
+  function revealAllHints() {
+    if (isReadOnly) return;
+
+    const unfound = activeKeywords.filter((w) => !foundKeywords.includes(w));
+    if (unfound.length === 0) return;
+
+    unfound.forEach((word) => {
+      if (!hintedWords[word]) {
+        hintedWords[word] = maskWord(word);
+      }
+    });
+
+    playHintRevealSound();
+    renderKeywordList();
+    persist();
+
+    dom.keywordListEl.querySelectorAll('.keyword-chip.hinted').forEach((chipEl) => {
+      chipEl.classList.remove('keyword-chip-hint-hit');
+      void chipEl.offsetWidth;
+      chipEl.classList.add('keyword-chip-hint-hit');
+      setTimeout(() => chipEl.classList.remove('keyword-chip-hint-hit'), 800);
+    });
+
+    stopHintTimer(false);
+    isHintReady = false;
+    if (dom.mascotHintPopupEl) {
+      dom.mascotHintPopupEl.classList.remove('clickable');
+    }
+    if (dom.hintCloudEl) {
+      dom.hintCloudEl.classList.remove('ready');
+    }
+    if (dom.hintMascotEl) {
+      dom.hintMascotEl.src = 'assets/mascot/mascot-idle.png';
+    }
+    if (dom.hintCloudTextEl) {
+      dom.hintCloudTextEl.textContent = 'Hết gợi ý ✨';
     }
   }
 
@@ -322,12 +649,18 @@ export function createGame({ dom, state }) {
     init,
     closeVictoryDialog,
     openInfoDialog,
+    closeInfoDialog,
     handleInfoSubmit,
     handleExportAction,
+    handleCannotExportAction,
+    handleGgFormClick,
     handleReset,
+    handleHintClick,
+    autoSolve,
+    revealAllHints,
   };
 }
 
-export function startNewMatrix() {
-  return generateMatrix();
+export function startNewMatrix(keywordItems = null) {
+  return generateMatrix(keywordItems);
 }

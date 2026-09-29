@@ -1,5 +1,3 @@
-// animation.js - Chi lo them/xoa class, khong chua logic game (dumb component)
-
 export function markSelecting(el) {
   el.classList.add('cell-selecting');
 }
@@ -22,7 +20,6 @@ export function shakeInvalid(elements) {
   });
 }
 
-// Dung chung cho moi dialog-overlay (victory, nhap thong tin...)
 export function showDialog(dialogEl, vibrate = false) {
   dialogEl.classList.remove('hidden');
   requestAnimationFrame(() => dialogEl.classList.add('show'));
@@ -34,8 +31,6 @@ export function hideDialog(dialogEl) {
   setTimeout(() => dialogEl.classList.add('hidden'), 250);
 }
 
-// Phao hoa mung chien thang - canvas thuan, khong dung thu vien ngoai.
-// Ve vai "qua phao hoa" no lech nhau tren canvas roi tu tat sau ~2.5s.
 const CONFETTI_COLORS = ['#ff7a1a', '#00eaff', '#b026ff', '#2effa0', '#ffffff'];
 const CONFETTI_DURATION_MS = 2500;
 const CONFETTI_PARTICLES_PER_BURST = 40;
@@ -72,7 +67,6 @@ export function launchConfetti(canvasEl) {
   canvasEl.style.height = `${h}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // Cac dot no lech thoi gian de tao cam giac phao hoa lien tuc
   const bursts = [
     { x: w * 0.3, y: h * 0.35, delay: 0 },
     { x: w * 0.7, y: h * 0.3, delay: 250 },
@@ -91,7 +85,7 @@ export function launchConfetti(canvasEl) {
   function frame(now) {
     ctx.clearRect(0, 0, w, h);
     particles.forEach((p) => {
-      p.vy += 0.05; // trong luc
+      p.vy += 0.05;
       p.x += p.vx;
       p.y += p.vy;
       p.life -= 1;
@@ -111,4 +105,98 @@ export function launchConfetti(canvasEl) {
     }
   }
   requestAnimationFrame(frame);
+}
+
+export function launchCometHint(fromEl, toEl, onArrival) {
+  if (!fromEl || !toEl) {
+    if (onArrival) onArrival();
+    return;
+  }
+
+  const fromRect = fromEl.getBoundingClientRect();
+  const toRect = toEl.getBoundingClientRect();
+
+  const startX = fromRect.left + fromRect.width / 2;
+  const startY = fromRect.top + fromRect.height / 2;
+  const endX = toRect.left + toRect.width / 2;
+  const endY = toRect.top + toRect.height / 2;
+
+  const comet = document.createElement('div');
+  comet.className = 'hint-comet-projectile';
+  comet.innerHTML = '<span class="comet-spark">✨</span><span class="comet-trail"></span>';
+  comet.style.left = `${startX}px`;
+  comet.style.top = `${startY}px`;
+  document.body.appendChild(comet);
+
+  const duration = 500;
+  const startTime = performance.now();
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+    const currentX = startX + (endX - startX) * ease;
+    const arcHeight = -45 * Math.sin(progress * Math.PI);
+    const currentY = startY + (endY - startY) * ease + arcHeight;
+
+    comet.style.transform = `translate(${currentX - startX}px, ${currentY - startY}px) scale(${1 + 0.35 * Math.sin(progress * Math.PI)})`;
+
+    if (progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      comet.remove();
+      spawnSparkleBurst(endX, endY);
+      toEl.classList.add('keyword-chip-hint-hit');
+      setTimeout(() => toEl.classList.remove('keyword-chip-hint-hit'), 800);
+      if (onArrival) onArrival();
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+
+function spawnSparkleBurst(x, y) {
+  const container = document.createElement('div');
+  container.className = 'sparkle-burst-container';
+  container.style.left = `${x}px`;
+  container.style.top = `${y}px`;
+
+  for (let i = 0; i < 14; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'sparkle-particle';
+    const angle = (Math.PI * 2 * i) / 14 + (Math.random() - 0.5) * 0.4;
+    const dist = 24 + Math.random() * 32;
+    particle.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+    particle.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
+    particle.style.setProperty('--color', CONFETTI_COLORS[i % CONFETTI_COLORS.length]);
+    container.appendChild(particle);
+  }
+
+  document.body.appendChild(container);
+  setTimeout(() => container.remove(), 700);
+}
+
+export function playIntroCurtainAnimation(loaderEl, onComplete) {
+  if (!loaderEl) {
+    if (onComplete) onComplete();
+    return;
+  }
+
+  let completed = false;
+  const startPullCurtain = () => {
+    if (completed) return;
+    completed = true;
+    loaderEl.classList.add('curtain-pulling');
+    setTimeout(() => {
+      loaderEl.classList.add('hidden');
+      if (onComplete) onComplete();
+    }, 850);
+  };
+
+  loaderEl.addEventListener('click', startPullCurtain, { once: true });
+  document.addEventListener('keydown', startPullCurtain, { once: true });
+
+  // Mascot jumps up from bottom to top (~1.6s), then pulls the black screen down
+  setTimeout(startPullCurtain, 1650);
 }
