@@ -8,7 +8,7 @@ The game lets players find hidden English keywords in a generated letter grid, s
 
 ## 🎮 Live Demo
 
-[Play Word Hunt Game](https://webdesignwordsearch2026.vercel.app/)
+[Play Word Hunt Game](https://word-hunt-game.vercel.app/)
 
 ## Features
 
