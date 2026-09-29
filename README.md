@@ -6,6 +6,10 @@ A browser-based word-search puzzle game developed in the context of activities a
 
 The game lets players find hidden English keywords in a generated letter grid, save progress locally, use hints, play background music, and export the completed result as a PNG image.
 
+## 🎮 Live Demo
+
+[Play Word Hunt Game](https://webdesignwordsearch2026.vercel.app/)
+
 ## Features
 
 - 9 × 9 word-search grid
